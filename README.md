@@ -16,6 +16,15 @@ This script required `Regex` package to run. Please run the following code to in
 $ pip install regex
 ```
 
+## Todo
+
+- [x] Search specific motif of a given FASTA file 
+- [x] Support regular expression
+- [] > Support fuzzy searching
+- [] Mark unmatched base
+- [] Reset span counting at every set of sequence
+- [] Testing on multi running environment
+
 ## Contributing
 
 Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code
