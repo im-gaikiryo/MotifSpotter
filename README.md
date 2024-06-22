@@ -20,10 +20,10 @@ $ pip install regex
 
 - [x] Search specific motif of a given FASTA file 
 - [x] Support regular expression
-- [] > Support fuzzy searching
-- [] Mark unmatched base
-- [] Reset span counting at every set of sequence
-- [] Testing on multi running environment
+- [ ] > Support fuzzy searching
+- [ ] Mark unmatched base
+- [ ] Reset span counting at every set of sequence
+- [ ] Testing on multi running environment
 
 ## Contributing
 
