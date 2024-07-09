@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import re, csv, os, sys, datetime, subprocess
-from argparse import (ArgumentParser, FileType)
+from argparse import (ArgumentParser)
 
 try:
     import regex
@@ -9,8 +9,14 @@ except ImportError:
     print("The package 'regex' is necesary to run.\nPlease try running 'pip install regex' or see help with '-h' or '--help' option.")
     exit(1)
 
+try:
+    from pyexcelerate import Workbook, Style, Font, Alignment, Color
+except ImportError:
+    print("The package 'pyexcelerate' is necesary to run.\nPlease try running 'pip install pyexcelerate' or see help with '-h' or '--help' option.")
+    exit(1)
+
 #=======================================================VERSION=======================================================#
-_version = '1.0, Jun-19-2024'
+_version = '1.1, Jul-09-2024'
 #====================================================END OF VERSION===================================================#
 
 docinfo = '''
@@ -49,15 +55,15 @@ TESTING ENVIRONMENT:
 
 USAGE:
 - - - 
-python3 motifspotter -f $INPUT_FASTA_FILE -m $MORIF_SEQUENCE -t $MOTIF_TYPE [-o] [$OUTPUT_FILE]
+python3 motifspotter -f $INPUT_FASTA_FILE -m $MORIF_SEQUENCE -e $ALLOWED_MISMATCH -t $MOTIF_TYPE -o $OUTPUT_FORMAT 
 
 For further information and detailed decription of each parameter, please run `python3 motifspotter -h`
 =======================================================================================================================
 '''
 
-#======================================================VARIABLES======================================================#
-result = []
+#=======================================================CONSTANT======================================================#
 now = datetime.datetime.now()
+output_prefix='Matched_Seq_' + now.strftime('%Y%m%d_%H%M%S')
 IUPAC_alphabet = re.compile(r'[^a-zA-Z-. \n]+')
 IUPAC_dna_table = str.maketrans({
     "A": "A",
@@ -121,18 +127,18 @@ IUPAC_amino_table = str.maketrans({
     "J": "[LI]", #Xle
     "X": "[A-Z]", #Xxx
 })
-#Create translate table for translate() using `str.maketrans()`
-#==================================================END OF VARIABLES==================================================#
+# Create translate table for translate() using `str.maketrans()`
+#===================================================END OF CONSTANT==================================================#
 
 #===================================================CORE FUNCTIONS===================================================#
 def parse_args():
     """Parse the input arguments, use '-h' for help"""
     commands = ArgumentParser(prog='MotifSpotter', description='Regular expressions supported motif searching scripts.')
     commands.add_argument('-f', metavar='FILE', type=str, required=True, help='Source FASTA file for processing.')
-    commands.add_argument('-m', metavar='MOTIF', type=str, required=True, help='Target motif sequence. Regular expression is supported.')
+    commands.add_argument('-m', metavar='MOTIF', type=str, required=True, help='Target motif sequence. IUPAC ambiguity codes and regular expression is supported.')
+    commands.add_argument('-e', metavar='INTEGER', type=int, required=True, help='Maximum allowed ambiguity. Number of maximum allowed mismatch (include subsittution, insertion and deletion) should be specified.')
     commands.add_argument('-t', type=str, required=True, choices=['dna','rna','amino'], help='Type of motif sequence.') 
-    #commands.add_argument('-e', metavar='INTEGER', type=int, required=True,  help='Maximum allowed ambiguity. Number of maximum allowed mismatch should be specified')
-    commands.add_argument('-o', metavar='OUTPUT', type=str, required=False, default='Matched_Seq_' + now.strftime('%Y%m%d_%H%M%S') + '.csv', help='Location and name for output file.')
+    commands.add_argument('-o', type=str, choices=['csv','excel'], required=True, help='Desired output format.')
     commands.add_argument('-v', action='version', version='%(prog)s {}'.format(_version))
     return commands.parse_args()
 args = parse_args()
@@ -152,6 +158,14 @@ def pre_parser(_input_file):
         # Lines containing only spaces and empty strings are filtered out.
         # The result is written to ./_tmp for further processing.
 
+motif = "(%s)" % args.m + "{e<=%d}" % args.e
+# Compile motif
+
+result = [['Results of spotting motif {}'.format(motif)], ['Identifier', 'Position', 'Matched Sequence', 'Fuzzy Count (substitution, insertion, deletion)', 'Relative change position (substitution, insertion, deletion)']]
+# Define a `result` variable with header to store the result.
+
+
+
 def search(_motif, _type):
     """Searching for target motif in each sequence and export the result as group."""
     if _type == 'dna':
@@ -164,7 +178,7 @@ def search(_motif, _type):
         raise IOError('NOT VALID MOTIF TYPE')
     # Translate motif table into corresponded regex form.
 
-    
+
     with open('./_tmp', 'r') as f:
         for line in f:
             if line.startswith(">"):
@@ -176,30 +190,120 @@ def search(_motif, _type):
                     raise IOError("NOT A VALID FASTA FILE")
                 # Make sure _seq do not contains any invalid string
                 
+                
                 for _matched in regex.finditer(regexed_motif, _seq, regex.BESTMATCH, overlapped=True):
-                    _result = [_head, _matched.span(), _matched.group(), _matched.fuzzy_counts]
+                    
+                    rel_span = list(_matched.fuzzy_changes)
+                    '''Adding asterisks above and below the matched sequences to indicate location of substitution and insertion'''
+
+                    def get_rel_pos(x):
+                        return x - _matched.span()[0]
+                    # Define a function to calculate the relative position of the mismatched base in each found sequence
+                    # Substracting the mismatched base's absolute position from the first base's absolute position of the matched seuqnce.
+
+                    for i in range(len(rel_span)):
+                        if not(len(rel_span[i])==0):
+                            rel_span[i] = list(map(get_rel_pos, rel_span[i]))
+                    # Using map() function to get relative position of mismatched base
+                    
+
+                    if rel_span[0]:
+                        max_substitution_position = max(rel_span[0])
+                        _substitution_mark = [' '] * (max_substitution_position + 1)
+                        # If the first section of the rel_span(representing the relative position of base substitution) isn't null
+                        # Assign the largest value in rel_span[0] to `max_substitution_position`
+                        # Create a blank list `_substitution_mark` and specify the list size to the `max_substitution_position + 1` 
+                        # In this way, the whole `rel_span[0]` can be fitted whithin the list
+
+                        for pos in rel_span[0]:
+                            _substitution_mark[pos] = '*'
+                        substitution_mark = ''.join(_substitution_mark)
+                        # As for the integer `pos` described in the `rel_span[0]`, assign `*` to the nth of the `_substitution_mark` list.
+                        # Join the looped result together as string and define as `substitution_mark`
+
+                    else:
+                        substitution_mark = ''
+                        # If the first section of the rel_span is null, return null to `subsitution_mark`
+
+                    if rel_span[2]:
+                        max_insertion_position = max(rel_span[2])
+                        _insertion_mark = [' '] * (max_insertion_position + 1)
+
+                        for pos in rel_span[2]:
+                            _insertion_mark[pos] = '^'
+                        insertion_mark = ''.join(_insertion_mark)
+                    else:
+                        insertion_mark = ''
+                    # Define `insertion_mark` as the location of `insertion`
+
+                    _matched_seq_with_asterisk = substitution_mark + '\n' + _matched.group() + '\n' + insertion_mark
+
+
+                    _result = [_head, _matched.span(), _matched_seq_with_asterisk, _matched.fuzzy_counts, rel_span]
                     result.append(_result)
                 # Search for motif matching sequences in `_seq` and extract as iterator.
                 # Assign the identifier, the position of the matching sequence, and the sequence itself to the `_result` variable as a list.
                 
         
-def write(result, _output_csv):
+def csv_write(result):
     """Receive the result and export to specified output file"""
-    with open(_output_csv, mode='w') as f:
+
+    global output_filename
+    output_filename = output_prefix + ".csv"
+    with open(output_filename, mode='w') as f:
         writer = csv.writer(f, delimiter=',', quotechar='"', quoting=csv.QUOTE_ALL)
-        writer.writerow(['Results of spotting motif {}'.format(args.m)])
-        writer.writerow(['Identifier', 'Position', 'Sequence', 'Fuzzy Count (substitution, insertion, deletion)'])
         writer.writerows(result)
+
+def xlsx_write(_result):
+    """Write the result and apply style on it, export as Excel file"""
+
+    global output_filename  
+    max = len(result)
+    output_filename = output_prefix + ".xlsx"
+    # Declare necessary variables and constants
+
+    wb=Workbook()
+    ws = wb.new_sheet("Results", data=_result)
+    # Write the result
+
+    ws.range("A1", "E2").style.fill.background = Color(189,192,191)
+    ws.range("A1", "E2").style.font = Font(bold = True, size = 14)
+    ws.range("A1", "E2").style.alignment = Alignment(horizontal= "center", vertical= "center", wrap_text = True)
+    ws.range("A1", "E2").style.borders.bottom.color = Color(0, 0, 0)
+    ws.range("A2", "E2").style.borders.right.color = Color(0, 0, 0)
+    # Configure the style for header
+
+    ws.range("A3", "A%d" % max).style.fill.background = Color(189,192,191)
+    ws.range("A3", "A%d" % max).style.font = Font(bold = True, size = 12)
+    ws.range("A3", "A%d" % max).style.alignment = Alignment(horizontal= "center", vertical= "center", wrap_text = True)
+    ws.range("A3", "A%d" % max).style.borders.right.style = '_'
+    ws.range("A3", "A%d" % max).style.borders.bottom.style = '_'
+    ws.set_col_style(1, Style(size = -1))
+    ws.set_col_style(2, Style(alignment=Alignment(wrap_text=True, horizontal='center', vertical='center'), font=Font(size = 12), size = -1))
+    ws.set_col_style(3, Style(alignment=Alignment(wrap_text=True, horizontal='left', vertical='center'), font=Font(family="Monaco", size = 12), size = -1))
+    ws.set_col_style(4, Style(alignment=Alignment(wrap_text=True, horizontal='center', vertical='center'), font=Font(size = 12), size = -1))
+    ws.set_col_style(5, Style(alignment=Alignment(wrap_text=True, horizontal='center', vertical='center'), font=Font(size = 12), size = -1))
+    # Configure the style of the remaning part of the sheet
+
+    wb.save(output_filename)
+
+
 #================================================END OF CORE FUNCTIONS===============================================#
 
 #========================================================MAIN========================================================#
 def main():
     try:
         pre_parser(args.f)
-        search(args.m, args.t)
-        write(result, args.o)
+        search(motif, args.t)
+        if args.o == "csv":
+            csv_write(result)
+        elif args.o == "excel":
+            xlsx_write(result)
+        else:
+            assert False, f"Invalid argumant {args.o}"
+
         os.remove('./_tmp')
-        subprocess.run(['open', args.o], check=True)
+        subprocess.run(['open', output_filename], check=True)
         return 0
     except OSError:
         print >>sys.stderr, "Execution failed:"
