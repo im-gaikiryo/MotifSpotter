@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import re, csv, os, sys, datetime, subprocess
+import re, csv, os, sys, datetime, subprocess, platform
 from argparse import (ArgumentParser)
 
 try:
@@ -49,7 +49,8 @@ SOFTWARE.
 TESTING ENVIRONMENT:
 - - - - - - - - - - 
 * Python 3.12.2
-  Theoretically, this script should works in Python 3.5+ environment.
+* PyExcelerate 0.12.0
+* regex 2024.5.15  
 * macOS 12.4 Monterey
   Testing for Windows and Linux environment is needed.
 
@@ -63,6 +64,7 @@ For further information and detailed decription of each parameter, please run `p
 
 #=======================================================CONSTANT======================================================#
 now = datetime.datetime.now()
+pf = platform.system()
 output_prefix='Matched_Seq_' + now.strftime('%Y%m%d_%H%M%S')
 IUPAC_alphabet = re.compile(r'[^a-zA-Z-. \n]+')
 IUPAC_dna_table = str.maketrans({
@@ -164,8 +166,6 @@ motif = "(%s)" % args.m + "{e<=%d}" % args.e
 result = [['Results of spotting motif {}'.format(motif)], ['Identifier', 'Position', 'Matched Sequence', 'Fuzzy Count (substitution, insertion, deletion)', 'Relative change position (substitution, insertion, deletion)']]
 # Define a `result` variable with header to store the result.
 
-
-
 def search(_motif, _type):
     """Searching for target motif in each sequence and export the result as group."""
     if _type == 'dna':
@@ -225,11 +225,11 @@ def search(_motif, _type):
                         substitution_mark = ''
                         # If the first section of the rel_span is null, return null to `subsitution_mark`
 
-                    if rel_span[2]:
-                        max_insertion_position = max(rel_span[2])
+                    if rel_span[1]:
+                        max_insertion_position = max(rel_span[1])
                         _insertion_mark = [' '] * (max_insertion_position + 1)
 
-                        for pos in rel_span[2]:
+                        for pos in rel_span[1]:
                             _insertion_mark[pos] = '^'
                         insertion_mark = ''.join(_insertion_mark)
                     else:
@@ -280,7 +280,13 @@ def xlsx_write(_result):
     ws.range("A3", "A%d" % max).style.borders.bottom.style = '_'
     ws.set_col_style(1, Style(size = -1))
     ws.set_col_style(2, Style(alignment=Alignment(wrap_text=True, horizontal='center', vertical='center'), font=Font(size = 12), size = -1))
-    ws.set_col_style(3, Style(alignment=Alignment(wrap_text=True, horizontal='left', vertical='center'), font=Font(family="Monaco", size = 12), size = -1))
+    if pf == 'Windows':
+        ws.set_col_style(3, Style(alignment=Alignment(wrap_text=True, horizontal='left', vertical='center'), font=Font(family="Consolas", size = 12), size = -1))
+    elif pf == 'Darwin':
+        ws.set_col_style(3, Style(alignment=Alignment(wrap_text=True, horizontal='left', vertical='center'), font=Font(family="Monaco", size = 12), size = -1))
+    elif pf == 'Linux':
+        ws.set_col_style(3, Style(alignment=Alignment(wrap_text=True, horizontal='left', vertical='center'), font=Font(family="DejaVu Sans Mono", size = 12), size = -1))
+    # Change font type base on 
     ws.set_col_style(4, Style(alignment=Alignment(wrap_text=True, horizontal='center', vertical='center'), font=Font(size = 12), size = -1))
     ws.set_col_style(5, Style(alignment=Alignment(wrap_text=True, horizontal='center', vertical='center'), font=Font(size = 12), size = -1))
     # Configure the style of the remaning part of the sheet
@@ -302,9 +308,15 @@ def main():
         else:
             assert False, f"Invalid argumant {args.o}"
 
+        if os.name == 'nt':
+            subprocess.Popen(['start', output_filename], shell=True)
+        else:
+            subprocess.run(['open', output_filename], check=True)
+        # Excute command based on opering system
+        
         os.remove('./_tmp')
-        subprocess.run(['open', output_filename], check=True)
         return 0
+
     except OSError:
         print >>sys.stderr, "Execution failed:"
 

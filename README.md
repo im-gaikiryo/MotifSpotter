@@ -8,6 +8,8 @@ A regular expressions supported motif searching script
 ```bash
 motifspotter [-h] -f FILE -m MOTIF -e INTEGER -t {dna,rna,amino} -o {csv,excel} [-v]
 ```
+> [!NOTE]
+> As for Windows machine, the backslash appears in the file path (`\`) should replace with double backslash (`\\`) to avoid error.
 
 ### Prerequisites
 
@@ -17,7 +19,9 @@ $ pip install regex
 $ pip install pyexcelerate
 ```
 
-**NOTE:** In some cases, you might keep getting a warning about lack of dependence even after properly installing `regex`. This might because your python environment is mixed and the `regex` package was installed in the wrong path. This should be solve by running `pip3 install regex`. However this could possibly trigger another error, `error: externally-managed-environment`, because of python3.X's packages management policy. To avoid this error, you can just simply create a virtual environment and run the script from it.
+> [!NOTE]
+> In some cases, you might keep getting a warning about lack of dependence even after properly installing `regex`. This might because your python environment is mixed and packages was installed in a wrong path. This should be solve by running `pip3 install regex`. However this could possibly trigger another error, `error: externally-managed-environment`, because of python3.X's packages management policy. To avoid this error, you can just simply create a virtual environment and run the script from it.
+
 ```bash
 $ cd $SCRIPTDIR
 $ mkdir .venv
@@ -33,8 +37,9 @@ $ source .venv/bin/activate
 - [x] Support regular expression
 - [x] Support fuzzy searching
 - [x] Mark unmatched base
+- [x] Testing on multi running environment (Tested on Windows 11)
 - [ ] Reset span counting at every set of sequence
-- [ ] Testing on multi running environment
+
 
 ## Contributing
 
